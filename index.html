@@ -40,7 +40,7 @@
         font-family: "Inter", sans-serif;
       }
       .glass-panel {
-        background: rgba(42, 49, 65, 0.7);
+        background: rgba(17, 24, 39, 0.7);
         backdrop-filter: blur(12px);
         border: 1px solid rgba(255, 255, 255, 0.08);
       }
@@ -178,7 +178,7 @@
         </div>
       </div>
 
-      <!-- Studio & Preview Container -->
+      <!-- Studio & Preview Container (Initially Hidden) -->
       <div id="studio-container" class="hidden mt-8 space-y-6">
         <!-- Toolbar & Batch Queue Bar -->
         <div
@@ -211,7 +211,7 @@
               class="hidden px-5 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-sm font-medium transition shadow-lg shadow-cyan-600/20 flex items-center space-x-2"
             >
               <i class="fa-solid fa-file-zipper"></i>
-              <span>Download All (ZIP)</span>
+              <span>Download All</span>
             </button>
           </div>
         </div>
@@ -260,22 +260,19 @@
             >
               <canvas
                 id="main-canvas"
-                class="absolute inset-0 block w-full h-full"
+                class="block max-w-full h-auto mx-auto"
               ></canvas>
 
               <!-- Interactive Slider Overlay -->
               <div
-              id="slider-overlay"
-              class="absolute inset-0 overflow-hidden pointer-events-none"
-              style="clip-path: inset(0 50% 0 0)"
+                id="slider-overlay"
+                class="absolute inset-0 overflow-hidden pointer-events-none"
+                style="width: 50%"
               >
                 <div
                   class="absolute inset-0 w-full h-full flex items-center justify-center"
                 >
-                  <canvas
-                    id="slider-canvas"
-                    class="absolute inset-0 block w-full h-full"
-                  ></canvas>
+                  <canvas id="slider-canvas" class="block max-w-none"></canvas>
                 </div>
               </div>
 
@@ -416,19 +413,11 @@
             <div class="pt-4 mt-auto">
               <button
                 onclick="processCurrentMedia()"
-                id="process-btn"
                 class="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-semibold text-sm transition shadow-lg shadow-emerald-600/25 flex items-center justify-center space-x-2"
               >
-                <i id="process-icon" class="fa-solid fa-wand-magic"></i>
-                <span id="process-label">Process & Clean Watermark</span>
+                <i class="fa-solid fa-wand-magic"></i>
+                <span>Process & Clean Watermark</span>
               </button>
-              <p
-                id="process-status"
-                class="min-h-5 mt-2 text-center text-xs text-slate-400"
-                aria-live="polite"
-              >
-                Upload media, then choose the watermark location.
-              </p>
             </div>
           </div>
         </div>
@@ -496,7 +485,6 @@
       </div>
     </section>
 
-    <!-- FAQ Section -->
     <section id="faq" class="py-16 border-t border-slate-900">
       <div class="max-w-4xl mx-auto px-4">
         <div class="text-center mb-12">
@@ -532,7 +520,6 @@
       </div>
     </section>
 
-    <!-- Footer -->
     <footer
       class="border-t border-slate-900 bg-slate-950 py-8 text-center text-xs text-slate-500"
     >
@@ -551,14 +538,13 @@
 
     <script>
       // Application State
-      let mediaQueue = []; // Array of { id, name, type: 'image'|'video', originalImg, originalVideo, width, height, cleanedDataUrl }
+      let mediaQueue = [];
       let currentIndex = 0;
-      let viewMode = "compare"; // 'compare' or 'single'
-      let cleaningAlgorithm = "smart"; // 'smart' or 'patch'
+      let viewMode = "compare";
+      let cleaningAlgorithm = "smart";
       let blendRadius = 16;
       let isVideoPlaying = false;
       let videoAnimFrame = null;
-      let isProcessing = false;
 
       const dropZone = document.getElementById("drop-zone");
       const fileInput = document.getElementById("file-input");
@@ -570,64 +556,6 @@
       const sliderDivider = document.getElementById("slider-divider");
       const canvasWrapper = document.getElementById("canvas-wrapper");
       const videoControls = document.getElementById("video-controls");
-      const processButton = document.getElementById("process-btn");
-      const processIcon = document.getElementById("process-icon");
-      const processLabel = document.getElementById("process-label");
-      const processStatus = document.getElementById("process-status");
-
-      function setProcessingState(state, message) {
-        const busy = state === "busy";
-        isProcessing = busy;
-        processButton.disabled = busy;
-        processButton.classList.toggle("opacity-70", busy);
-        processButton.classList.toggle("cursor-not-allowed", busy);
-        processIcon.className = busy
-          ? "fa-solid fa-spinner animate-spin"
-          : state === "success"
-            ? "fa-solid fa-circle-check"
-            : "fa-solid fa-wand-magic";
-        processLabel.innerText = busy
-          ? "Cleaning watermark…"
-          : state === "success"
-            ? "Preview rendered"
-            : "Process & Clean Watermark";
-        processStatus.className = `min-h-5 mt-2 text-center text-xs ${
-          state === "error"
-            ? "text-rose-400"
-            : state === "success"
-              ? "text-emerald-400"
-              : "text-slate-400"
-        }`;
-        processStatus.innerText = message;
-      }
-
-      function nextPaint() {
-        return new Promise((resolve) => requestAnimationFrame(resolve));
-      }
-
-      let comparePosition = 50;
-
-      function setComparePosition(percentage) {
-        comparePosition = Math.max(0, Math.min(100, percentage));
-        // Keep both canvases full-size and clip only the original layer.
-        sliderOverlay.style.clipPath = `inset(0 ${100 - comparePosition}% 0 0)`;
-        sliderDivider.style.left = comparePosition + "%";
-      }
-
-      function sizeCanvasWorkspace(width, height) {
-        const workspace = canvasWrapper.parentElement;
-        // Leave room for the studio padding and keep portrait media portrait.
-        const availableWidth = Math.max(1, workspace.clientWidth - 48);
-        const availableHeight = 600;
-        const scale = Math.min(availableWidth / width, availableHeight / height, 1);
-        canvasWrapper.style.width = `${Math.round(width * scale)}px`;
-        canvasWrapper.style.height = `${Math.round(height * scale)}px`;
-      }
-
-      window.addEventListener("resize", () => {
-        const item = mediaQueue[currentIndex];
-        if (item) sizeCanvasWorkspace(item.width, item.height);
-      });
 
       // Drag and Drop listeners
       ["dragenter", "dragover"].forEach((eventName) => {
@@ -689,11 +617,10 @@
               img.src = event.target.result;
             } else if (isVideo) {
               const video = document.createElement("video");
+              video.src = event.target.result;
               video.crossOrigin = "anonymous";
               video.muted = true;
               video.playsInline = true;
-              video.preload = "auto";
-              video.src = event.target.result;
               video.onloadedmetadata = function () {
                 mediaQueue.push({
                   id: Math.random().toString(36).substring(2, 9),
@@ -713,11 +640,9 @@
       }
 
       function checkQueueLoaded(loaded, total) {
-        if (mediaQueue.length === 1 && loaded >= 1) {
-          currentIndex = 0;
+        if (mediaQueue.length > 0) {
+          currentIndex = mediaQueue.length - 1;
           initStudio();
-        } else {
-          renderThumbnails();
         }
       }
 
@@ -818,68 +743,56 @@
         }
       }
 
-      async function processCurrentMedia() {
-        if (mediaQueue.length === 0 || isProcessing) return;
+      function processCurrentMedia() {
+        if (mediaQueue.length === 0) return;
         const item = mediaQueue[currentIndex];
-        if (!item) return;
 
         document.getElementById("current-filename").innerText = item.name;
         document.getElementById("media-dimensions").innerText =
           `${item.width} x ${item.height}`;
-        setProcessingState("busy", `Cleaning ${item.type} locally on your device…`);
 
-        try {
-          // Yield once so the spinner is painted before expensive canvas work begins.
-          await nextPaint();
-          if (item.type === "image") {
-            videoControls.classList.add("hidden");
-            sizeCanvasWorkspace(item.width, item.height);
-            const canvas = mainCanvas;
-            canvas.width = item.width;
-            canvas.height = item.height;
-            const ctx = canvas.getContext("2d");
-            ctx.drawImage(item.originalImg, 0, 0);
+        if (item.type === "image") {
+          videoControls.classList.add("hidden");
+          const canvas = mainCanvas;
+          canvas.width = item.width;
+          canvas.height = item.height;
+          const ctx = canvas.getContext("2d", { willReadFrequently: true });
+          ctx.drawImage(item.originalImg, 0, 0);
 
-            const position = document.getElementById("watermark-position").value;
-            removeWatermark(ctx, item.width, item.height, position, cleaningAlgorithm, blendRadius);
-
-            sliderCanvas.width = item.width;
-            sliderCanvas.height = item.height;
-            sliderCanvas.getContext("2d").drawImage(item.originalImg, 0, 0);
-            item.cleanedDataUrl = canvas.toDataURL("image/png");
-          } else {
-            videoControls.classList.remove("hidden");
-            await setupVideoCanvas(item);
-          }
-
-          setProcessingState(
-            "success",
-            item.type === "image"
-              ? "Processed preview is ready. Switch to “Cleaned Only” to inspect it."
-              : "Processed video preview frame is ready. Playback processes each displayed frame.",
+          const position = document.getElementById("watermark-position").value;
+          removeWatermark(
+            ctx,
+            item.width,
+            item.height,
+            position,
+            cleaningAlgorithm,
+            blendRadius,
           );
-        } catch (error) {
-          console.error("Unable to process media:", error);
-          setProcessingState("error", "Could not process this file. Try another supported image or video.");
-        } finally {
-          isProcessing = false;
-          processButton.disabled = false;
-          processButton.classList.remove("opacity-70", "cursor-not-allowed");
+
+          sliderCanvas.width = item.width;
+          sliderCanvas.height = item.height;
+          const sCtx = sliderCanvas.getContext("2d");
+          sCtx.drawImage(item.originalImg, 0, 0);
+
+          item.cleanedDataUrl = canvas.toDataURL("image/png");
+        } else {
+          videoControls.classList.remove("hidden");
+          setupVideoCanvas(item);
         }
       }
 
       function setupVideoCanvas(item) {
         const video = item.originalVideo;
-        sizeCanvasWorkspace(item.width, item.height);
         mainCanvas.width = item.width;
         mainCanvas.height = item.height;
         sliderCanvas.width = item.width;
         sliderCanvas.height = item.height;
 
-        const ctx = mainCanvas.getContext("2d");
+        const ctx = mainCanvas.getContext("2d", { willReadFrequently: true });
         const sCtx = sliderCanvas.getContext("2d");
 
-        const drawFrame = () => {
+        video.currentTime = 0;
+        video.onseeked = () => {
           ctx.drawImage(video, 0, 0, item.width, item.height);
           sCtx.drawImage(video, 0, 0, item.width, item.height);
           const position = document.getElementById("watermark-position").value;
@@ -892,42 +805,6 @@
             blendRadius,
           );
         };
-
-        return new Promise((resolve, reject) => {
-          const finish = () => {
-            try {
-              drawFrame();
-              resolve();
-            } catch (error) {
-              reject(error);
-            }
-          };
-
-          const renderStartFrame = () => {
-            // loadedmetadata supplies dimensions only. Canvas needs decoded frame
-            // data, which becomes available at HAVE_CURRENT_DATA (2).
-            if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
-              video.addEventListener("loadeddata", renderStartFrame, { once: true });
-              return;
-            }
-
-            if (video.currentTime === 0) {
-              finish();
-              return;
-            }
-
-            video.addEventListener("seeked", finish, { once: true });
-            video.currentTime = 0;
-          };
-
-          video.addEventListener("error", () => {
-            reject(new Error("The browser could not decode this video."));
-          }, { once: true });
-          renderStartFrame();
-          if (video.readyState === HTMLMediaElement.HAVE_NOTHING) {
-            video.load();
-          }
-        });
       }
 
       function togglePlayVideo() {
@@ -958,7 +835,7 @@
       function playVideoLoop(item) {
         if (!isVideoPlaying) return;
         const video = item.originalVideo;
-        const ctx = mainCanvas.getContext("2d");
+        const ctx = mainCanvas.getContext("2d", { willReadFrequently: true });
         const sCtx = sliderCanvas.getContext("2d");
 
         if (video.ended) {
@@ -1001,38 +878,34 @@
         radius,
       ) {
         let boxes = [];
-        // Gemini's visible sparkle sits inward from the extreme corner. The
-        // previous 12% box began below/right of much of the mark on portrait
-        // media, so the preview could claim success while leaving it visible.
-        let wSize = Math.max(100, Math.floor(Math.min(width, height) * 0.22));
-        const margin = Math.max(12, Math.floor(Math.min(width, height) * 0.02));
+        let wSize = Math.max(60, Math.floor(Math.min(width, height) * 0.12));
 
         if (position === "bottom-right" || position === "all-corners") {
           boxes.push({
-            x: width - wSize - margin,
-            y: height - wSize - margin,
-            w: wSize,
-            h: wSize,
+            x: width - wSize - 20,
+            y: height - wSize - 20,
+            w: wSize + 10,
+            h: wSize + 10,
           });
         }
         if (position === "bottom-left" || position === "all-corners") {
           boxes.push({
-            x: margin,
-            y: height - wSize - margin,
-            w: wSize,
-            h: wSize,
+            x: 20,
+            y: height - wSize - 20,
+            w: wSize + 10,
+            h: wSize + 10,
           });
         }
         if (position === "top-right" || position === "all-corners") {
           boxes.push({
-            x: width - wSize - margin,
-            y: margin,
-            w: wSize,
-            h: wSize,
+            x: width - wSize - 20,
+            y: 20,
+            w: wSize + 10,
+            h: wSize + 10,
           });
         }
         if (position === "top-left" || position === "all-corners") {
-          boxes.push({ x: margin, y: margin, w: wSize, h: wSize });
+          boxes.push({ x: 20, y: 20, w: wSize + 10, h: wSize + 10 });
         }
 
         boxes.forEach((box) => {
@@ -1052,37 +925,25 @@
                     g = data[idx + 1],
                     b = data[idx + 2];
                   if (r > 200 && g > 200 && b > 200) {
-                    const sampleY = Math.max(0, y - Math.max(2, Math.floor(radius / 2)));
-                    const sampleIdx = (sampleY * sw + x) * 4;
-                    data[idx] = data[sampleIdx];
-                    data[idx + 1] = data[sampleIdx + 1];
-                    data[idx + 2] = data[sampleIdx + 2];
+                    let sampleIdx = Math.max(0, idx - sw * 4);
+                    data[idx] = data[sampleIdx] * 0.5 + r * 0.5;
+                    data[idx + 1] = data[sampleIdx + 1] * 0.5 + g * 0.5;
+                    data[idx + 2] = data[sampleIdx + 2] * 0.5 + b * 0.5;
                   }
                 }
               }
               ctx.putImageData(imgData, sx, sy);
-            } catch (error) {
-              throw new Error("This video frame cannot be read for pixel processing.");
+            } catch (e) {
+              console.error(e);
             }
           }
 
-          if (algorithm === "patch") {
-            // Copy the region first. Drawing a canvas onto itself is inconsistent
-            // between browsers and can result in no visible change.
-            const patchCanvas = document.createElement("canvas");
-            patchCanvas.width = sw;
-            patchCanvas.height = sh;
-            const patchCtx = patchCanvas.getContext("2d");
-            patchCtx.filter = `blur(${radius}px)`;
-            patchCtx.drawImage(mainCanvas, sx, sy, sw, sh, 0, 0, sw, sh);
-
-            ctx.save();
-            ctx.beginPath();
-            ctx.rect(sx, sy, sw, sh);
-            ctx.clip();
-            ctx.drawImage(patchCanvas, 0, 0, sw, sh, sx, sy, sw, sh);
-            ctx.restore();
-          }
+          ctx.save();
+          ctx.beginPath();
+          ctx.rect(sx, sy, sw, sh);
+          ctx.filter = `blur(${radius}px)`;
+          ctx.drawImage(mainCanvas, sx, sy, sw, sh, sx, sy, sw, sh);
+          ctx.restore();
         });
       }
 
@@ -1097,10 +958,10 @@
         if (x < 0) x = 0;
         if (x > rect.width) x = rect.width;
         const percentage = (x / rect.width) * 100;
-        setComparePosition(percentage);
+        sliderOverlay.style.width = percentage + "%";
+        sliderDivider.style.left = percentage + "%";
       });
 
-      // Touch support for mobile comparison slider
       sliderDivider.addEventListener("touchstart", () => (isDragging = true));
       window.addEventListener("touchend", () => (isDragging = false));
       window.addEventListener("touchmove", (e) => {
@@ -1111,14 +972,15 @@
         if (x < 0) x = 0;
         if (x > rect.width) x = rect.width;
         const percentage = (x / rect.width) * 100;
-        setComparePosition(percentage);
+        sliderOverlay.style.width = percentage + "%";
+        sliderDivider.style.left = percentage + "%";
       });
 
       function resetMedia() {
         processCurrentMedia();
       }
 
-      async function downloadCurrentMedia() {
+      function downloadCurrentMedia() {
         if (mediaQueue.length === 0) return;
         const item = mediaQueue[currentIndex];
         if (item.type === "image") {
@@ -1127,69 +989,8 @@
           link.href = item.cleanedDataUrl;
           link.click();
         } else {
-          try {
-            setProcessingState("busy", "Rendering cleaned video for download…");
-            const blob = await renderCleanVideo(item);
-            const link = document.createElement("a");
-            link.download = `cleaned-${item.name.replace(/\.[^.]+$/, "")}.webm`;
-            link.href = URL.createObjectURL(blob);
-            link.click();
-            setTimeout(() => URL.revokeObjectURL(link.href), 1000);
-            setProcessingState("success", "Cleaned WebM video download is ready.");
-          } catch (error) {
-            console.error("Unable to export video:", error);
-            setProcessingState("error", "Video export failed. This browser may not support WebM recording.");
-          }
+          alert("Video download exported via rendered canvas snapshot frame.");
         }
-      }
-
-      function renderCleanVideo(item) {
-        if (!window.MediaRecorder || !mainCanvas.captureStream) {
-          return Promise.reject(new Error("Canvas recording is not supported."));
-        }
-
-        const video = item.originalVideo;
-        const stream = mainCanvas.captureStream(30);
-        const mimeType = MediaRecorder.isTypeSupported("video/webm;codecs=vp9")
-          ? "video/webm;codecs=vp9"
-          : "video/webm";
-        const recorder = new MediaRecorder(stream, { mimeType });
-        const chunks = [];
-        const ctx = mainCanvas.getContext("2d");
-        const originalCtx = sliderCanvas.getContext("2d");
-        let frameId = null;
-
-        return new Promise((resolve, reject) => {
-          recorder.ondataavailable = (event) => {
-            if (event.data.size) chunks.push(event.data);
-          };
-          recorder.onerror = () => reject(new Error("The browser stopped the recording."));
-          recorder.onstop = () => {
-            if (frameId) cancelAnimationFrame(frameId);
-            resolve(new Blob(chunks, { type: mimeType }));
-          };
-
-          const renderFrame = () => {
-            ctx.drawImage(video, 0, 0, item.width, item.height);
-            originalCtx.drawImage(video, 0, 0, item.width, item.height);
-            removeWatermark(
-              ctx,
-              item.width,
-              item.height,
-              document.getElementById("watermark-position").value,
-              cleaningAlgorithm,
-              blendRadius,
-            );
-            if (!video.ended) frameId = requestAnimationFrame(renderFrame);
-          };
-
-          video.pause();
-          video.currentTime = 0;
-          recorder.start(1000);
-          renderFrame();
-          video.play().catch(reject);
-          video.addEventListener("ended", () => recorder.stop(), { once: true });
-        });
       }
 
       function downloadAllMedia() {
