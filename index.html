@@ -387,7 +387,7 @@
               >
               <select
                 id="watermark-position"
-                onchange="processCurrentMedia()"
+                onchange="setProcessState(false, 'Settings changed. Click Remove Watermark.')"
                 class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-slate-200 focus:outline-none focus:border-emerald-500 transition"
               >
                 <option value="bottom-right">
@@ -578,14 +578,16 @@
       const processIcon = document.getElementById("process-icon");
       const processLabel = document.getElementById("process-label");
       const processStatus = document.getElementById("process-status");
+      const processingOverlay = document.getElementById("processing-overlay");
 
       function setProcessState(busy, message, complete = false) {
         isProcessing = busy;
         processButton.disabled = busy;
         processButton.classList.toggle("opacity-70", busy);
         processButton.classList.toggle("cursor-not-allowed", busy);
+        processingOverlay.classList.toggle("hidden", !busy);
         processIcon.className = busy ? "fa-solid fa-spinner animate-spin" : complete ? "fa-solid fa-circle-check" : "fa-solid fa-wand-magic";
-        processLabel.textContent = busy ? "Cleaning watermark…" : complete ? "Preview processed" : "Process & Clean Watermark";
+        processLabel.textContent = busy ? "Removing…" : complete ? "Watermark removed" : "Remove Watermark";
         processStatus.textContent = message;
         processStatus.className = `mt-2 text-center text-xs ${complete ? "text-emerald-400" : "text-slate-400"}`;
       }
@@ -702,7 +704,7 @@
       function initStudio() {
         studioContainer.classList.remove("hidden");
         renderThumbnails();
-        processCurrentMedia();
+        showOriginalMedia();
         studioContainer.scrollIntoView({ behavior: "smooth" });
       }
 
@@ -729,7 +731,7 @@
             stopVideoPlayback();
             currentIndex = idx;
             renderThumbnails();
-            processCurrentMedia();
+            showOriginalMedia();
           };
 
           thumbnailStrip.appendChild(thumb);
@@ -756,13 +758,13 @@
             ? "p-3 rounded-xl border border-emerald-500 bg-emerald-500/10 text-emerald-400 text-xs font-medium text-left transition flex flex-col space-y-1"
             : "p-3 rounded-xl border border-slate-800 bg-slate-900 text-slate-400 text-xs font-medium text-left transition flex flex-col space-y-1 hover:border-slate-700";
 
-        processCurrentMedia();
+        setProcessState(false, "Settings changed. Click Remove Watermark.");
       }
 
       function updateRadius(val) {
         blendRadius = parseInt(val);
         document.getElementById("radius-val").innerText = val + "px";
-        processCurrentMedia();
+        setProcessState(false, "Settings changed. Click Remove Watermark.");
       }
 
       function setViewMode(mode) {
@@ -788,12 +790,46 @@
         }
       }
 
+      function showOriginalMedia() {
+        const item = mediaQueue[currentIndex];
+        if (!item) return;
+        stopVideoPlayback();
+        document.getElementById("current-filename").innerText = item.name;
+        document.getElementById("media-dimensions").innerText = `${item.width} x ${item.height}`;
+        sizeCanvasWorkspace(item.width, item.height);
+        mainCanvas.width = item.width;
+        mainCanvas.height = item.height;
+        sliderCanvas.width = item.width;
+        sliderCanvas.height = item.height;
+        const ctx = mainCanvas.getContext("2d");
+        const sCtx = sliderCanvas.getContext("2d");
+
+        if (item.type === "image") {
+          videoControls.classList.add("hidden");
+          ctx.drawImage(item.originalImg, 0, 0);
+          sCtx.drawImage(item.originalImg, 0, 0);
+        } else {
+          videoControls.classList.remove("hidden");
+          const drawOriginalFrame = () => {
+            ctx.drawImage(item.originalVideo, 0, 0, item.width, item.height);
+            sCtx.drawImage(item.originalVideo, 0, 0, item.width, item.height);
+          };
+          if (item.originalVideo.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+            drawOriginalFrame();
+          } else {
+            item.originalVideo.addEventListener("loadeddata", drawOriginalFrame, { once: true });
+          }
+        }
+        setProcessState(false, "Ready to remove the watermark.");
+      }
+
       async function processCurrentMedia() {
         if (mediaQueue.length === 0 || isProcessing) return;
         const item = mediaQueue[currentIndex];
         setProcessState(true, "Preparing the preview…");
         // Let the browser paint the loader before canvas processing begins.
         await new Promise((resolve) => requestAnimationFrame(resolve));
+        await new Promise((resolve) => setTimeout(resolve, 550));
 
         document.getElementById("current-filename").innerText = item.name;
         document.getElementById("media-dimensions").innerText =
