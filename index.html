@@ -260,19 +260,34 @@
             >
               <canvas
                 id="main-canvas"
-                class="block max-w-full h-auto mx-auto"
+                class="absolute inset-0 block w-full h-full"
               ></canvas>
+
+              <div
+                id="processing-overlay"
+                class="hidden absolute inset-0 z-20 bg-slate-950/60 backdrop-blur-[2px] flex flex-col items-center justify-center text-center"
+                aria-live="polite"
+              >
+                <div class="relative mb-4">
+                  <i class="fa-solid fa-sparkles text-4xl text-emerald-300 animate-pulse"></i>
+                  <i class="fa-solid fa-wand-magic-sparkles absolute -right-5 -top-3 text-lg text-cyan-300 animate-bounce"></i>
+                </div>
+                <div class="rounded-2xl bg-slate-950/85 border border-emerald-400/30 px-5 py-3 shadow-2xl">
+                  <p class="text-sm font-semibold text-white">Removing watermark…</p>
+                  <p class="mt-1 text-xs text-emerald-300">Cleaning the preview frame</p>
+                </div>
+              </div>
 
               <!-- Interactive Slider Overlay -->
               <div
-                id="slider-overlay"
-                class="absolute inset-0 overflow-hidden pointer-events-none"
-                style="width: 50%"
+              id="slider-overlay"
+              class="absolute inset-0 overflow-hidden pointer-events-none"
+              style="clip-path: inset(0 50% 0 0)"
               >
                 <div
                   class="absolute inset-0 w-full h-full flex items-center justify-center"
                 >
-                  <canvas id="slider-canvas" class="block max-w-none"></canvas>
+                  <canvas id="slider-canvas" class="absolute inset-0 block w-full h-full"></canvas>
                 </div>
               </div>
 
@@ -413,11 +428,13 @@
             <div class="pt-4 mt-auto">
               <button
                 onclick="processCurrentMedia()"
+                id="process-btn"
                 class="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-semibold text-sm transition shadow-lg shadow-emerald-600/25 flex items-center justify-center space-x-2"
               >
-                <i class="fa-solid fa-wand-magic"></i>
-                <span>Process & Clean Watermark</span>
+                <i id="process-icon" class="fa-solid fa-wand-magic"></i>
+                <span id="process-label">Remove Watermark</span>
               </button>
+              <p id="process-status" class="mt-2 text-center text-xs text-slate-400" aria-live="polite"></p>
             </div>
           </div>
         </div>
@@ -545,6 +562,7 @@
       let blendRadius = 16;
       let isVideoPlaying = false;
       let videoAnimFrame = null;
+      let isProcessing = false;
 
       const dropZone = document.getElementById("drop-zone");
       const fileInput = document.getElementById("file-input");
@@ -556,6 +574,21 @@
       const sliderDivider = document.getElementById("slider-divider");
       const canvasWrapper = document.getElementById("canvas-wrapper");
       const videoControls = document.getElementById("video-controls");
+      const processButton = document.getElementById("process-btn");
+      const processIcon = document.getElementById("process-icon");
+      const processLabel = document.getElementById("process-label");
+      const processStatus = document.getElementById("process-status");
+
+      function setProcessState(busy, message, complete = false) {
+        isProcessing = busy;
+        processButton.disabled = busy;
+        processButton.classList.toggle("opacity-70", busy);
+        processButton.classList.toggle("cursor-not-allowed", busy);
+        processIcon.className = busy ? "fa-solid fa-spinner animate-spin" : complete ? "fa-solid fa-circle-check" : "fa-solid fa-wand-magic";
+        processLabel.textContent = busy ? "Cleaning watermark…" : complete ? "Preview processed" : "Process & Clean Watermark";
+        processStatus.textContent = message;
+        processStatus.className = `mt-2 text-center text-xs ${complete ? "text-emerald-400" : "text-slate-400"}`;
+      }
 
       // Drag and Drop listeners
       ["dragenter", "dragover"].forEach((eventName) => {
@@ -654,6 +687,18 @@
         }
       }
 
+      function sizeCanvasWorkspace(width, height) {
+        const availableWidth = Math.max(1, canvasWrapper.parentElement.clientWidth - 48);
+        const scale = Math.min(availableWidth / width, 600 / height, 1);
+        canvasWrapper.style.width = `${Math.round(width * scale)}px`;
+        canvasWrapper.style.height = `${Math.round(height * scale)}px`;
+      }
+
+      window.addEventListener("resize", () => {
+        const item = mediaQueue[currentIndex];
+        if (item) sizeCanvasWorkspace(item.width, item.height);
+      });
+
       function initStudio() {
         studioContainer.classList.remove("hidden");
         renderThumbnails();
@@ -743,9 +788,12 @@
         }
       }
 
-      function processCurrentMedia() {
-        if (mediaQueue.length === 0) return;
+      async function processCurrentMedia() {
+        if (mediaQueue.length === 0 || isProcessing) return;
         const item = mediaQueue[currentIndex];
+        setProcessState(true, "Preparing the preview…");
+        // Let the browser paint the loader before canvas processing begins.
+        await new Promise((resolve) => requestAnimationFrame(resolve));
 
         document.getElementById("current-filename").innerText = item.name;
         document.getElementById("media-dimensions").innerText =
@@ -753,6 +801,7 @@
 
         if (item.type === "image") {
           videoControls.classList.add("hidden");
+          sizeCanvasWorkspace(item.width, item.height);
           const canvas = mainCanvas;
           canvas.width = item.width;
           canvas.height = item.height;
@@ -775,8 +824,10 @@
           sCtx.drawImage(item.originalImg, 0, 0);
 
           item.cleanedDataUrl = canvas.toDataURL("image/png");
+          setProcessState(false, "Processed preview ready. Use Cleaned Only to inspect it.", true);
         } else {
           videoControls.classList.remove("hidden");
+          sizeCanvasWorkspace(item.width, item.height);
           setupVideoCanvas(item);
         }
       }
@@ -791,7 +842,6 @@
         const ctx = mainCanvas.getContext("2d", { willReadFrequently: true });
         const sCtx = sliderCanvas.getContext("2d");
 
-        video.currentTime = 0;
         video.onseeked = () => {
           ctx.drawImage(video, 0, 0, item.width, item.height);
           sCtx.drawImage(video, 0, 0, item.width, item.height);
@@ -804,7 +854,14 @@
             cleaningAlgorithm,
             blendRadius,
           );
+          setProcessState(false, "Processed video frame ready. Playback processes each frame.", true);
         };
+
+        if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && video.currentTime === 0) {
+          video.onseeked();
+        } else {
+          video.currentTime = 0;
+        }
       }
 
       function togglePlayVideo() {
@@ -958,7 +1015,7 @@
         if (x < 0) x = 0;
         if (x > rect.width) x = rect.width;
         const percentage = (x / rect.width) * 100;
-        sliderOverlay.style.width = percentage + "%";
+        sliderOverlay.style.clipPath = `inset(0 ${100 - percentage}% 0 0)`;
         sliderDivider.style.left = percentage + "%";
       });
 
@@ -972,7 +1029,7 @@
         if (x < 0) x = 0;
         if (x > rect.width) x = rect.width;
         const percentage = (x / rect.width) * 100;
-        sliderOverlay.style.width = percentage + "%";
+        sliderOverlay.style.clipPath = `inset(0 ${100 - percentage}% 0 0)`;
         sliderDivider.style.left = percentage + "%";
       });
 
