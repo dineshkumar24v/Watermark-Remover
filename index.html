@@ -970,73 +970,72 @@
         algorithm,
         radius,
       ) {
-        let boxes = [];
-        let wSize = Math.max(60, Math.floor(Math.min(width, height) * 0.12));
+        const boxes = [];
+        const minSide = Math.min(width, height);
+        const boxSize = Math.max(96, Math.floor(minSide * 0.18));
+        const margin = Math.max(12, Math.floor(minSide * 0.02));
+        const addBox = (x, y) => boxes.push({ x, y, w: boxSize, h: boxSize });
 
-        if (position === "bottom-right" || position === "all-corners") {
-          boxes.push({
-            x: width - wSize - 20,
-            y: height - wSize - 20,
-            w: wSize + 10,
-            h: wSize + 10,
-          });
-        }
-        if (position === "bottom-left" || position === "all-corners") {
-          boxes.push({
-            x: 20,
-            y: height - wSize - 20,
-            w: wSize + 10,
-            h: wSize + 10,
-          });
-        }
-        if (position === "top-right" || position === "all-corners") {
-          boxes.push({
-            x: width - wSize - 20,
-            y: 20,
-            w: wSize + 10,
-            h: wSize + 10,
-          });
-        }
-        if (position === "top-left" || position === "all-corners") {
-          boxes.push({ x: 20, y: 20, w: wSize + 10, h: wSize + 10 });
-        }
+        if (position === "bottom-right" || position === "all-corners") addBox(width - boxSize - margin, height - boxSize - margin);
+        if (position === "bottom-left" || position === "all-corners") addBox(margin, height - boxSize - margin);
+        if (position === "top-right" || position === "all-corners") addBox(width - boxSize - margin, margin);
+        if (position === "top-left" || position === "all-corners") addBox(margin, margin);
 
         boxes.forEach((box) => {
-          let sx = Math.max(0, box.x);
-          let sy = Math.max(0, box.y);
-          let sw = Math.min(width - sx, box.w);
-          let sh = Math.min(height - sy, box.h);
+          const sx = Math.max(0, Math.floor(box.x));
+          const sy = Math.max(0, Math.floor(box.y));
+          const sw = Math.min(width - sx, box.w);
+          const sh = Math.min(height - sy, box.h);
+          if (sw <= 0 || sh <= 0) return;
+
+          const imageData = ctx.getImageData(sx, sy, sw, sh);
+          const data = imageData.data;
+          const threshold = 200;
+          const offset = Math.max(6, Math.min(24, Math.floor(radius)));
 
           if (algorithm === "smart") {
-            try {
-              let imgData = ctx.getImageData(sx, sy, sw, sh);
-              let data = imgData.data;
-              for (let y = 0; y < sh; y++) {
-                for (let x = 0; x < sw; x++) {
-                  let idx = (y * sw + x) * 4;
-                  let r = data[idx],
-                    g = data[idx + 1],
-                    b = data[idx + 2];
-                  if (r > 200 && g > 200 && b > 200) {
-                    let sampleIdx = Math.max(0, idx - sw * 4);
-                    data[idx] = data[sampleIdx] * 0.5 + r * 0.5;
-                    data[idx + 1] = data[sampleIdx + 1] * 0.5 + g * 0.5;
-                    data[idx + 2] = data[sampleIdx + 2] * 0.5 + b * 0.5;
+            // Contextual pixel reconstruction: replace bright, low-saturation
+            // watermark pixels from a diagonal neighborhood instead of blurring
+            // or drawing the destination canvas back onto itself.
+            for (let y = 0; y < sh; y++) {
+              for (let x = 0; x < sw; x++) {
+                const idx = (y * sw + x) * 4;
+                const r = data[idx], g = data[idx + 1], b = data[idx + 2];
+                const lowSaturation = Math.max(r, g, b) - Math.min(r, g, b) < 45;
+                if (r > threshold && g > threshold && b > threshold && lowSaturation) {
+                  const sampleX = Math.max(0, Math.min(sw - 1, x + (x < sw / 2 ? offset : -offset)));
+                  const sampleY = Math.max(0, Math.min(sh - 1, y + (y < sh / 2 ? offset : -offset)));
+                  const sampleIdx = (sampleY * sw + sampleX) * 4;
+                  data[idx] = data[sampleIdx];
+                  data[idx + 1] = data[sampleIdx + 1];
+                  data[idx + 2] = data[sampleIdx + 2];
+                }
+              }
+            }
+          } else {
+            // Texture clone: replace bright watermark blocks with the closest
+            // diagonal texture patch in the same corner region.
+            const patchSize = Math.max(4, Math.min(12, Math.floor(radius / 2)));
+            for (let y = patchSize; y < sh - patchSize; y += patchSize) {
+              for (let x = patchSize; x < sw - patchSize; x += patchSize) {
+                const idx = (y * sw + x) * 4;
+                if (data[idx] > threshold && data[idx + 1] > threshold && data[idx + 2] > threshold) {
+                  const refX = Math.max(0, x - patchSize * 2);
+                  const refY = Math.max(0, y - patchSize * 2);
+                  for (let py = 0; py < patchSize && y + py < sh; py++) {
+                    for (let px = 0; px < patchSize && x + px < sw; px++) {
+                      const target = ((y + py) * sw + (x + px)) * 4;
+                      const source = ((refY + py) * sw + (refX + px)) * 4;
+                      data[target] = data[source];
+                      data[target + 1] = data[source + 1];
+                      data[target + 2] = data[source + 2];
+                    }
                   }
                 }
               }
-              ctx.putImageData(imgData, sx, sy);
-            } catch (e) {
-              console.error(e);
             }
           }
-
-          ctx.save();
-          ctx.beginPath();
-          ctx.rect(sx, sy, sw, sh);
-          ctx.filter = `blur(${radius}px)`;
-          ctx.drawImage(mainCanvas, sx, sy, sw, sh, sx, sy, sw, sh);
-          ctx.restore();
+          ctx.putImageData(imageData, sx, sy);
         });
       }
 
