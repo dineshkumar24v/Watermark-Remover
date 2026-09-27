@@ -1,45 +1,52 @@
-# STREAMING_CHUNK:Preparing your deployment instructions...
 # Gemini Watermark Remover — Running & Hosting Guide
 
-Congratulations on downloading your custom **Gemini Watermark Remover** application (`index.html`)! Because this is a 100% self-contained frontend application, you have complete flexibility in how you run and share it.
+The **Gemini Watermark Remover** consists of a modern Tailwind/HTML5 frontend ([index.html](file:///e:/AI-YouTube-Factory/gemini%20watermark%20remover%20project/index.html)) and a high-performance Python FastAPI backend ([main.py](file:///e:/AI-YouTube-Factory/gemini%20watermark%20remover%20project/main.py)) powered by OpenCV for image/video inpainting.
 
 ---
 
-### Phase 1: Running It Locally (Right Now)
-You don't need a server or any installations to test your app. 
+### Option 1: Running the Complete App (Backend + Frontend) — Recommended
 
-1. **Double-Click to Test:** Simply locate the downloaded `index.html` file on your computer and double-click it. It will open directly in your default web browser (Chrome, Safari, Edge, Firefox).
-2. **Local Development Server (Recommended for modern web APIs):**
-   * If you use **VS Code**, install the **Live Server** extension. Right-click your `index.html` file inside VS Code and select **"Open with Live Server"**.
-   * If you have **Node.js** installed, open your terminal in the folder containing the file and run:
-     ```bash
-     npx serve
-     ```
-     This prevents any potential browser security restrictions when handling local file previews.
+The Python server hosts both the API and the web interface in a single process:
 
----
+1. **Install Dependencies (if not already installed):**
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-### Phase 2: Hosting It Live Online (Free)
-If you want to share this tool with friends, creators, or put your own domain name on it, you can deploy it to a free static web host in less than 2 minutes.
+2. **Start the Server:**
+   ```bash
+   python main.py
+   ```
+   *Or with live-reload:*
+   ```bash
+   python -m uvicorn main:app --host 127.0.0.1 --port 8080 --reload
+   ```
 
-#### Option 1: Vercel (Fastest & Easiest)
-1. Go to [vercel.com](https://vercel.com/) and create a free account.
-2. Drag and drop your project folder containing `index.html` straight into the Vercel dashboard.
-3. Vercel will instantly give you a live HTTPS URL (e.g., `gemini-cleaner.vercel.app`).
-
-#### Option 2: Netlify Drop
-1. Go to [drop.netlify.com](https://drop.netlify.com/).
-2. Drag and drop your folder onto the browser window.
-3. Netlify will instantly publish it and give you a public link.
-
-#### Option 3: GitHub Pages
-1. Create a free public repository on GitHub.
-2. Upload your `index.html` file (rename it to `index.html` if it isn't already).
-3. Go to your repository **Settings** -> **Pages**, and set the source branch to `main`. Your site will be live at `yourusername.github.io/repo-name`.
+3. **Open in Browser:**
+   Visit [http://127.0.0.1:8080](http://127.0.0.1:8080) in your web browser.
 
 ---
 
-### Phase 3: Future Customizations & Upgrades
-Since you own the code file, you can customize it anytime:
-* **Add Your Branding:** Open `index.html` in any text editor (like Notepad, VS Code, or TextEdit) and change `GeminiClean Pro` to your own brand name.
-* **Tweak Watermark Detection:** Adjust the algorithms inside the `<script>` section if Gemini changes its watermark position or styling in future updates.
+### Option 2: Running the Frontend Standalone
+
+If you only want to open the HTML interface directly:
+
+1. **Direct Browser Open:** Double-click [index.html](file:///e:/AI-YouTube-Factory/gemini%20watermark%20remover%20project/index.html) or open it in Chrome/Edge/Firefox.
+2. **Local Static Server:**
+   ```bash
+   npx serve .
+   ```
+   *Note: For backend processing features (OpenCV inpainting and video reconstruction), ensure the FastAPI backend is running on port `8080`.*
+
+---
+
+### Option 3: Hosting It Online
+
+#### 1. Frontend Hosting (Free Static Hosting)
+* **Vercel / Netlify / GitHub Pages:** Deploy [index.html](file:///e:/AI-YouTube-Factory/gemini%20watermark%20remover%20project/index.html) directly by dragging and dropping the folder into Vercel or Netlify Drop.
+
+#### 2. Full-Stack Hosting (API + Frontend)
+* **Render / Railway / Fly.io / VPS:** Deploy `main.py` and `requirements.txt` with start command:
+  ```bash
+  uvicorn main:app --host 0.0.0.0 --port $PORT
+  ```

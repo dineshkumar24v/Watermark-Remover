@@ -835,7 +835,10 @@
           payload.append("file", item.sourceFile);
           payload.append("position", document.getElementById("watermark-position").value);
           payload.append("inpaint_radius", String(Math.max(1, Math.min(15, Math.round(blendRadius / 3)))));
-          const response = await fetch("http://127.0.0.1:8000/api/remove-watermark", {
+          const endpoint = window.location.origin && window.location.origin.startsWith("http")
+            ? `${window.location.origin}/api/remove-watermark`
+            : "http://127.0.0.1:8080/api/remove-watermark";
+          const response = await fetch(endpoint, {
             method: "POST",
             body: payload,
           });
