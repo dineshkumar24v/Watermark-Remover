@@ -642,6 +642,7 @@
                   id: Math.random().toString(36).substring(2, 9),
                   name: file.name,
                   type: "image",
+                  sourceFile: file,
                   originalImg: img,
                   width: img.naturalWidth,
                   height: img.naturalHeight,
@@ -661,6 +662,7 @@
                   id: Math.random().toString(36).substring(2, 9),
                   name: file.name,
                   type: "video",
+                  sourceFile: file,
                   originalVideo: video,
                   width: video.videoWidth || 1280,
                   height: video.videoHeight || 720,
@@ -826,45 +828,55 @@
       async function processCurrentMedia() {
         if (mediaQueue.length === 0 || isProcessing) return;
         const item = mediaQueue[currentIndex];
-        setProcessState(true, "Preparing the preview…");
-        // Let the browser paint the loader before canvas processing begins.
-        await new Promise((resolve) => requestAnimationFrame(resolve));
-        await new Promise((resolve) => setTimeout(resolve, 550));
+        if (!item.sourceFile) return;
+        setProcessState(true, "Uploading and inpainting every frame…");
+        try {
+          const payload = new FormData();
+          payload.append("file", item.sourceFile);
+          payload.append("position", document.getElementById("watermark-position").value);
+          payload.append("inpaint_radius", String(Math.max(1, Math.min(15, Math.round(blendRadius / 3)))));
+          const response = await fetch("http://127.0.0.1:8000/api/remove-watermark", {
+            method: "POST",
+            body: payload,
+          });
+          if (!response.ok) throw new Error(await response.text());
+          const cleanedUrl = URL.createObjectURL(await response.blob());
 
-        document.getElementById("current-filename").innerText = item.name;
-        document.getElementById("media-dimensions").innerText =
-          `${item.width} x ${item.height}`;
-
-        if (item.type === "image") {
-          videoControls.classList.add("hidden");
-          sizeCanvasWorkspace(item.width, item.height);
-          const canvas = mainCanvas;
-          canvas.width = item.width;
-          canvas.height = item.height;
-          const ctx = canvas.getContext("2d", { willReadFrequently: true });
-          ctx.drawImage(item.originalImg, 0, 0);
-
-          const position = document.getElementById("watermark-position").value;
-          removeWatermark(
-            ctx,
-            item.width,
-            item.height,
-            position,
-            cleaningAlgorithm,
-            blendRadius,
-          );
-
-          sliderCanvas.width = item.width;
-          sliderCanvas.height = item.height;
-          const sCtx = sliderCanvas.getContext("2d");
-          sCtx.drawImage(item.originalImg, 0, 0);
-
-          item.cleanedDataUrl = canvas.toDataURL("image/png");
-          setProcessState(false, "Processed preview ready. Use Cleaned Only to inspect it.", true);
-        } else {
-          videoControls.classList.remove("hidden");
-          sizeCanvasWorkspace(item.width, item.height);
-          setupVideoCanvas(item);
+          if (item.type === "image") {
+            const cleanedImage = new Image();
+            await new Promise((resolve, reject) => {
+              cleanedImage.onload = resolve;
+              cleanedImage.onerror = reject;
+              cleanedImage.src = cleanedUrl;
+            });
+            mainCanvas.width = item.width;
+            mainCanvas.height = item.height;
+            sliderCanvas.width = item.width;
+            sliderCanvas.height = item.height;
+            mainCanvas.getContext("2d").drawImage(cleanedImage, 0, 0, item.width, item.height);
+            sliderCanvas.getContext("2d").drawImage(item.originalImg, 0, 0);
+            item.cleanedDataUrl = cleanedUrl;
+          } else {
+            const cleanedVideo = document.createElement("video");
+            cleanedVideo.muted = true;
+            cleanedVideo.playsInline = true;
+            cleanedVideo.src = cleanedUrl;
+            await new Promise((resolve, reject) => {
+              cleanedVideo.onloadeddata = resolve;
+              cleanedVideo.onerror = reject;
+            });
+            mainCanvas.width = item.width;
+            mainCanvas.height = item.height;
+            sliderCanvas.width = item.width;
+            sliderCanvas.height = item.height;
+            mainCanvas.getContext("2d").drawImage(cleanedVideo, 0, 0, item.width, item.height);
+            sliderCanvas.getContext("2d").drawImage(item.originalVideo, 0, 0, item.width, item.height);
+            item.cleanedVideoUrl = cleanedUrl;
+          }
+          setProcessState(false, "Watermark removal completed. Review the cleaned preview.", true);
+        } catch (error) {
+          console.error("Backend inpainting failed:", error);
+          setProcessState(false, "Could not reach the cleaner. Start the FastAPI server, then try again.");
         }
       }
 
@@ -1081,7 +1093,14 @@
           link.href = item.cleanedDataUrl;
           link.click();
         } else {
-          alert("Video download exported via rendered canvas snapshot frame.");
+          if (!item.cleanedVideoUrl) {
+            processStatus.textContent = "Remove the watermark before downloading the video.";
+            return;
+          }
+          const link = document.createElement("a");
+          link.download = `cleaned-${item.name.replace(/\.[^.]+$/, "")}.mp4`;
+          link.href = item.cleanedVideoUrl;
+          link.click();
         }
       }
 

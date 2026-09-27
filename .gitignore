@@ -1,0 +1,13 @@
+# Python cache files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Application storage folders
+uploads/
+outputs/
+
+# Environment files
+venv/
+.env
