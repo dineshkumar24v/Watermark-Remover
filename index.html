@@ -238,6 +238,15 @@
               class="absolute top-4 right-4 z-10 flex items-center space-x-2 bg-slate-900/80 backdrop-blur px-2 py-1 rounded-lg border border-slate-800"
             >
               <button
+                onclick="toggleTargetBox()"
+                id="btn-target-box"
+                class="px-2.5 py-1 rounded text-xs font-medium bg-emerald-600/20 text-emerald-400 border border-emerald-500/40 transition hover:bg-emerald-600/30 flex items-center space-x-1"
+                title="Toggle draggable watermark area"
+              >
+                <i class="fa-solid fa-crosshairs text-[10px]"></i>
+                <span>Area Box</span>
+              </button>
+              <button
                 onclick="setViewMode('compare')"
                 id="btn-mode-compare"
                 class="px-2.5 py-1 rounded text-xs font-medium bg-emerald-600 text-white transition"
@@ -262,6 +271,24 @@
                 id="main-canvas"
                 class="absolute inset-0 block w-full h-full"
               ></canvas>
+
+              <!-- Interactive Draggable & Resizable Target Box Overlay -->
+              <div
+                id="target-box"
+                class="absolute border-2 border-dashed border-emerald-400 bg-emerald-500/10 rounded-lg cursor-move z-10 flex flex-col justify-between p-1.5 shadow-lg select-none"
+                style="left: 70%; top: 78%; width: 22%; height: 16%;"
+              >
+                <div class="flex items-center justify-between text-[10px] font-bold text-emerald-300 pointer-events-none">
+                  <span class="bg-slate-950/80 px-1.5 py-0.5 rounded border border-emerald-500/30 backdrop-blur">
+                    <i class="fa-solid fa-crosshairs mr-1 text-emerald-400"></i>Watermark Area
+                  </span>
+                </div>
+                <div
+                  id="target-box-handle"
+                  class="w-3.5 h-3.5 bg-emerald-400 border border-slate-950 rounded-sm self-end cursor-se-resize shadow"
+                  title="Drag to resize"
+                ></div>
+              </div>
 
               <div
                 id="processing-overlay"
@@ -355,25 +382,44 @@
                 class="text-xs font-medium text-slate-300 uppercase tracking-wider"
                 >Cleaning Algorithm</label
               >
-              <div class="grid grid-cols-2 gap-2">
+              <div class="grid grid-cols-3 gap-2">
                 <button
                   onclick="setAlgorithm('smart')"
                   id="alg-smart"
-                  class="p-3 rounded-xl border border-emerald-500 bg-emerald-500/10 text-emerald-400 text-xs font-medium text-left transition flex flex-col space-y-1"
+                  class="p-2.5 rounded-xl border border-emerald-500 bg-emerald-500/10 text-emerald-400 text-xs font-medium text-left transition flex flex-col space-y-0.5"
                 >
-                  <span class="font-bold">Smart Inpaint</span>
+                  <span class="font-bold flex items-center space-x-1">
+                    <i class="fa-solid fa-sparkles text-[10px]"></i>
+                    <span>AI Smart</span>
+                  </span>
                   <span class="text-[10px] text-slate-400"
-                    >Contextual pixel fill</span
+                    >Navier-Stokes</span
                   >
                 </button>
                 <button
-                  onclick="setAlgorithm('patch')"
-                  id="alg-patch"
-                  class="p-3 rounded-xl border border-slate-800 bg-slate-900 text-slate-400 text-xs font-medium text-left transition flex flex-col space-y-1 hover:border-slate-700"
+                  onclick="setAlgorithm('telea')"
+                  id="alg-telea"
+                  class="p-2.5 rounded-xl border border-slate-800 bg-slate-900 text-slate-400 text-xs font-medium text-left transition flex flex-col space-y-0.5 hover:border-slate-700"
                 >
-                  <span class="font-bold">Alpha Blur</span>
+                  <span class="font-bold flex items-center space-x-1">
+                    <i class="fa-solid fa-bolt text-[10px]"></i>
+                    <span>Telea</span>
+                  </span>
                   <span class="text-[10px] text-slate-400"
-                    >Seamless edge blur</span
+                    >Fast March</span
+                  >
+                </button>
+                <button
+                  onclick="setAlgorithm('tight-box')"
+                  id="alg-tight-box"
+                  class="p-2.5 rounded-xl border border-slate-800 bg-slate-900 text-slate-400 text-xs font-medium text-left transition flex flex-col space-y-0.5 hover:border-slate-700"
+                >
+                  <span class="font-bold flex items-center space-x-1">
+                    <i class="fa-solid fa-vector-square text-[10px]"></i>
+                    <span>Box Fill</span>
+                  </span>
+                  <span class="text-[10px] text-slate-400"
+                    >Compact ROI</span
                   >
                 </button>
               </div>
@@ -387,7 +433,7 @@
               >
               <select
                 id="watermark-position"
-                onchange="setProcessState(false, 'Settings changed. Click Remove Watermark.')"
+                onchange="onSettingChanged()"
                 class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-slate-200 focus:outline-none focus:border-emerald-500 transition"
               >
                 <option value="bottom-right">
@@ -396,8 +442,56 @@
                 <option value="bottom-left">Bottom Left</option>
                 <option value="top-right">Top Right</option>
                 <option value="top-left">Top Left</option>
-                <option value="all-corners">All Corners / Custom Blend</option>
+                <option value="all-corners">All Corners</option>
               </select>
+            </div>
+
+            <!-- Region Size Slider -->
+            <div class="space-y-3">
+              <div class="flex justify-between items-center text-xs">
+                <span
+                  class="font-medium text-slate-300 uppercase tracking-wider"
+                  >Watermark Area Size</span
+                >
+                <span
+                  id="box-scale-val"
+                  class="text-emerald-400 font-mono font-bold"
+                  >Compact (8%)</span
+                >
+              </div>
+              <input
+                type="range"
+                id="box-scale-range"
+                min="4"
+                max="16"
+                value="8"
+                oninput="updateBoxScale(this.value)"
+                class="w-full accent-emerald-500 bg-slate-900 rounded-lg h-2 cursor-pointer"
+              />
+            </div>
+
+            <!-- Detection Sensitivity Slider -->
+            <div class="space-y-3">
+              <div class="flex justify-between items-center text-xs">
+                <span
+                  class="font-medium text-slate-300 uppercase tracking-wider"
+                  >Detection Sensitivity</span
+                >
+                <span
+                  id="sens-val"
+                  class="text-emerald-400 font-mono font-bold"
+                  >60%</span
+                >
+              </div>
+              <input
+                type="range"
+                id="sens-range"
+                min="20"
+                max="90"
+                value="60"
+                oninput="updateSensitivity(this.value)"
+                class="w-full accent-emerald-500 bg-slate-900 rounded-lg h-2 cursor-pointer"
+              />
             </div>
 
             <!-- Radius Slider -->
@@ -405,20 +499,20 @@
               <div class="flex justify-between items-center text-xs">
                 <span
                   class="font-medium text-slate-300 uppercase tracking-wider"
-                  >Blend Radius</span
+                  >Inpaint Blend Radius</span
                 >
                 <span
                   id="radius-val"
                   class="text-emerald-400 font-mono font-bold"
-                  >16px</span
+                  >3px</span
                 >
               </div>
               <input
                 type="range"
                 id="radius-range"
-                min="4"
-                max="40"
-                value="16"
+                min="1"
+                max="10"
+                value="3"
                 oninput="updateRadius(this.value)"
                 class="w-full accent-emerald-500 bg-slate-900 rounded-lg h-2 cursor-pointer"
               />
@@ -554,15 +648,22 @@
     </footer>
 
     <script>
+
       // Application State
       let mediaQueue = [];
       let currentIndex = 0;
       let viewMode = "compare";
-      let cleaningAlgorithm = "smart";
-      let blendRadius = 16;
+      let cleaningAlgorithm = "smart"; // "smart" (Navier-Stokes), "telea", "tight-box"
+      let boxScale = 0.12;
+      let detectionSensitivity = 0.6;
+      let blendRadius = 3;
       let isVideoPlaying = false;
       let videoAnimFrame = null;
       let isProcessing = false;
+
+      // Target Box Normalized Coordinates (0.0 to 1.0)
+      let currentBox = { x: 0.76, y: 0.80, w: 0.16, h: 0.14 };
+      let showTargetBox = true;
 
       const dropZone = document.getElementById("drop-zone");
       const fileInput = document.getElementById("file-input");
@@ -579,6 +680,9 @@
       const processLabel = document.getElementById("process-label");
       const processStatus = document.getElementById("process-status");
       const processingOverlay = document.getElementById("processing-overlay");
+      const targetBoxEl = document.getElementById("target-box");
+      const targetBoxHandle = document.getElementById("target-box-handle");
+      const btnTargetBox = document.getElementById("btn-target-box");
 
       function setProcessState(busy, message, complete = false) {
         isProcessing = busy;
@@ -748,25 +852,190 @@
         }
       }
 
+      function toggleTargetBox() {
+        showTargetBox = !showTargetBox;
+        targetBoxEl.style.display = showTargetBox ? "flex" : "none";
+        btnTargetBox.className = showTargetBox
+          ? "px-2.5 py-1 rounded text-xs font-medium bg-emerald-600/20 text-emerald-400 border border-emerald-500/40 transition hover:bg-emerald-600/30 flex items-center space-x-1"
+          : "px-2.5 py-1 rounded text-xs font-medium text-slate-400 border border-slate-800 transition hover:text-white flex items-center space-x-1";
+      }
+
+      function updateTargetBoxUI() {
+        if (!targetBoxEl) return;
+        targetBoxEl.style.left = `${(currentBox.x * 100).toFixed(1)}%`;
+        targetBoxEl.style.top = `${(currentBox.y * 100).toFixed(1)}%`;
+        targetBoxEl.style.width = `${(currentBox.w * 100).toFixed(1)}%`;
+        targetBoxEl.style.height = `${(currentBox.h * 100).toFixed(1)}%`;
+      }
+
+      function applyLocationPreset(pos) {
+        const item = mediaQueue[currentIndex];
+        const isTall = item ? (item.height > item.width * 1.15) : true;
+        const isWide = item ? (item.width > item.height * 1.15) : false;
+
+        let w, h, ox, oy;
+        if (isTall) {
+          w = 0.16; h = 0.14; ox = 0.08; oy = 0.06;
+        } else if (isWide) {
+          w = 0.14; h = 0.18; ox = 0.04; oy = 0.04;
+        } else {
+          // Square / 1:1 or moderate
+          w = 0.22; h = 0.22; ox = 0.08; oy = 0.08;
+        }
+
+        if (pos === "bottom-right" || pos === "all-corners") {
+          currentBox = { x: Math.max(0, 1 - w - ox), y: Math.max(0, 1 - h - oy), w: w, h: h };
+        } else if (pos === "bottom-left") {
+          currentBox = { x: ox, y: Math.max(0, 1 - h - oy), w: w, h: h };
+        } else if (pos === "top-right") {
+          currentBox = { x: Math.max(0, 1 - w - ox), y: oy, w: w, h: h };
+        } else if (pos === "top-left") {
+          currentBox = { x: ox, y: oy, w: w, h: h };
+        }
+        updateTargetBoxUI();
+        onSettingChanged();
+      }
+
+      // Drag & Resize event listeners for Target Box
+      let isBoxDragging = false;
+      let isBoxResizing = false;
+      let startMouse = { x: 0, y: 0 };
+      let startBox = { x: 0, y: 0, w: 0, h: 0 };
+
+      targetBoxEl.addEventListener("mousedown", (e) => {
+        if (e.target === targetBoxHandle) return;
+        isBoxDragging = true;
+        startMouse = { x: e.clientX, y: e.clientY };
+        startBox = { ...currentBox };
+        e.stopPropagation();
+      });
+
+      targetBoxHandle.addEventListener("mousedown", (e) => {
+        isBoxResizing = true;
+        startMouse = { x: e.clientX, y: e.clientY };
+        startBox = { ...currentBox };
+        e.stopPropagation();
+      });
+
+      window.addEventListener("mousemove", (e) => {
+        if (!isBoxDragging && !isBoxResizing) return;
+        const rect = canvasWrapper.getBoundingClientRect();
+        if (rect.width <= 0 || rect.height <= 0) return;
+
+        const dx = (e.clientX - startMouse.x) / rect.width;
+        const dy = (e.clientY - startMouse.y) / rect.height;
+
+        if (isBoxDragging) {
+          let newX = Math.max(0, Math.min(1 - startBox.w, startBox.x + dx));
+          let newY = Math.max(0, Math.min(1 - startBox.h, startBox.y + dy));
+          currentBox.x = newX;
+          currentBox.y = newY;
+        } else if (isBoxResizing) {
+          let newW = Math.max(0.06, Math.min(1 - startBox.x, startBox.w + dx));
+          let newH = Math.max(0.04, Math.min(1 - startBox.y, startBox.h + dy));
+          currentBox.w = newW;
+          currentBox.h = newH;
+        }
+        updateTargetBoxUI();
+        onSettingChanged();
+      });
+
+      window.addEventListener("mouseup", () => {
+        if (isBoxDragging || isBoxResizing) {
+          isBoxDragging = false;
+          isBoxResizing = false;
+          onSettingChanged();
+        }
+      });
+
+      // Touch events for mobile/tablet
+      targetBoxEl.addEventListener("touchstart", (e) => {
+        if (e.target === targetBoxHandle) return;
+        isBoxDragging = true;
+        const t = e.touches[0];
+        startMouse = { x: t.clientX, y: t.clientY };
+        startBox = { ...currentBox };
+      });
+
+      targetBoxHandle.addEventListener("touchstart", (e) => {
+        isBoxResizing = true;
+        const t = e.touches[0];
+        startMouse = { x: t.clientX, y: t.clientY };
+        startBox = { ...currentBox };
+        e.stopPropagation();
+      });
+
+      window.addEventListener("touchmove", (e) => {
+        if (!isBoxDragging && !isBoxResizing) return;
+        const rect = canvasWrapper.getBoundingClientRect();
+        if (rect.width <= 0 || rect.height <= 0) return;
+        const t = e.touches[0];
+        const dx = (t.clientX - startMouse.x) / rect.width;
+        const dy = (t.clientY - startMouse.y) / rect.height;
+
+        if (isBoxDragging) {
+          currentBox.x = Math.max(0, Math.min(1 - startBox.w, startBox.x + dx));
+          currentBox.y = Math.max(0, Math.min(1 - startBox.h, startBox.y + dy));
+        } else if (isBoxResizing) {
+          currentBox.w = Math.max(0.06, Math.min(1 - startBox.x, startBox.w + dx));
+          currentBox.h = Math.max(0.04, Math.min(1 - startBox.y, startBox.h + dy));
+        }
+        updateTargetBoxUI();
+        onSettingChanged();
+      });
+
+      window.addEventListener("touchend", () => {
+        isBoxDragging = false;
+        isBoxResizing = false;
+      });
+
+      function onSettingChanged() {
+        setProcessState(false, "Area updated. Click Remove Watermark to process.");
+        const item = mediaQueue[currentIndex];
+        if (item) {
+          if (item.type === "image") {
+            const ctx = mainCanvas.getContext("2d");
+            ctx.drawImage(item.originalImg, 0, 0);
+            removeWatermark(ctx, item.width, item.height, document.getElementById("watermark-position").value, cleaningAlgorithm, blendRadius, boxScale, detectionSensitivity);
+          }
+        }
+      }
+
       function setAlgorithm(alg) {
         cleaningAlgorithm = alg;
-        document.getElementById("alg-smart").className =
-          alg === "smart"
-            ? "p-3 rounded-xl border border-emerald-500 bg-emerald-500/10 text-emerald-400 text-xs font-medium text-left transition flex flex-col space-y-1"
-            : "p-3 rounded-xl border border-slate-800 bg-slate-900 text-slate-400 text-xs font-medium text-left transition flex flex-col space-y-1 hover:border-slate-700";
+        const btnSmart = document.getElementById("alg-smart");
+        const btnTelea = document.getElementById("alg-telea");
+        const btnBox = document.getElementById("alg-tight-box");
 
-        document.getElementById("alg-patch").className =
-          alg === "patch"
-            ? "p-3 rounded-xl border border-emerald-500 bg-emerald-500/10 text-emerald-400 text-xs font-medium text-left transition flex flex-col space-y-1"
-            : "p-3 rounded-xl border border-slate-800 bg-slate-900 text-slate-400 text-xs font-medium text-left transition flex flex-col space-y-1 hover:border-slate-700";
+        const activeCls = "p-2.5 rounded-xl border border-emerald-500 bg-emerald-500/10 text-emerald-400 text-xs font-medium text-left transition flex flex-col space-y-0.5";
+        const inactiveCls = "p-2.5 rounded-xl border border-slate-800 bg-slate-900 text-slate-400 text-xs font-medium text-left transition flex flex-col space-y-0.5 hover:border-slate-700";
 
-        setProcessState(false, "Settings changed. Click Remove Watermark.");
+        btnSmart.className = alg === "smart" ? activeCls : inactiveCls;
+        btnTelea.className = alg === "telea" ? activeCls : inactiveCls;
+        btnBox.className = alg === "tight-box" ? activeCls : inactiveCls;
+
+        onSettingChanged();
+      }
+
+      function updateBoxScale(val) {
+        boxScale = parseInt(val) / 100;
+        document.getElementById("box-scale-val").innerText = `${val}%`;
+        currentBox.w = boxScale * 2;
+        currentBox.h = boxScale * 1.5;
+        updateTargetBoxUI();
+        onSettingChanged();
+      }
+
+      function updateSensitivity(val) {
+        detectionSensitivity = parseInt(val) / 100;
+        document.getElementById("sens-val").innerText = `${val}%`;
+        onSettingChanged();
       }
 
       function updateRadius(val) {
         blendRadius = parseInt(val);
         document.getElementById("radius-val").innerText = val + "px";
-        setProcessState(false, "Settings changed. Click Remove Watermark.");
+        onSettingChanged();
       }
 
       function setViewMode(mode) {
@@ -806,15 +1075,19 @@
         const ctx = mainCanvas.getContext("2d");
         const sCtx = sliderCanvas.getContext("2d");
 
+        applyLocationPreset(document.getElementById("watermark-position").value);
+
         if (item.type === "image") {
           videoControls.classList.add("hidden");
           ctx.drawImage(item.originalImg, 0, 0);
           sCtx.drawImage(item.originalImg, 0, 0);
+          removeWatermark(ctx, item.width, item.height, document.getElementById("watermark-position").value, cleaningAlgorithm, blendRadius, boxScale, detectionSensitivity);
         } else {
           videoControls.classList.remove("hidden");
           const drawOriginalFrame = () => {
             ctx.drawImage(item.originalVideo, 0, 0, item.width, item.height);
             sCtx.drawImage(item.originalVideo, 0, 0, item.width, item.height);
+            removeWatermark(ctx, item.width, item.height, document.getElementById("watermark-position").value, cleaningAlgorithm, blendRadius, boxScale, detectionSensitivity);
           };
           if (item.originalVideo.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
             drawOriginalFrame();
@@ -829,12 +1102,21 @@
         if (mediaQueue.length === 0 || isProcessing) return;
         const item = mediaQueue[currentIndex];
         if (!item.sourceFile) return;
-        setProcessState(true, "Uploading and inpainting every frame…");
+        setProcessState(true, "AI inpainting and reconstructing clean frames…");
         try {
           const payload = new FormData();
           payload.append("file", item.sourceFile);
           payload.append("position", document.getElementById("watermark-position").value);
-          payload.append("inpaint_radius", String(Math.max(1, Math.min(15, Math.round(blendRadius / 3)))));
+          payload.append("mode", cleaningAlgorithm === "tight-box" ? "tight-box" : "smart");
+          payload.append("algorithm", cleaningAlgorithm === "telea" ? "telea" : "ns");
+          payload.append("box_scale", String(boxScale));
+          payload.append("sensitivity", String(detectionSensitivity));
+          payload.append("inpaint_radius", String(blendRadius));
+          payload.append("box_x", String(currentBox.x));
+          payload.append("box_y", String(currentBox.y));
+          payload.append("box_w", String(currentBox.w));
+          payload.append("box_h", String(currentBox.h));
+
           const endpoint = window.location.origin && window.location.origin.startsWith("http")
             ? `${window.location.origin}/api/remove-watermark`
             : "http://127.0.0.1:8080/api/remove-watermark";
@@ -876,10 +1158,10 @@
             sliderCanvas.getContext("2d").drawImage(item.originalVideo, 0, 0, item.width, item.height);
             item.cleanedVideoUrl = cleanedUrl;
           }
-          setProcessState(false, "Watermark removal completed. Review the cleaned preview.", true);
+          setProcessState(false, "Watermark seamlessly removed! Review the cleaned preview.", true);
         } catch (error) {
           console.error("Backend inpainting failed:", error);
-          setProcessState(false, "Could not reach the cleaner. Start the FastAPI server, then try again.");
+          setProcessState(false, "Could not connect to backend server. Make sure Python server is running.");
         }
       }
 
@@ -896,16 +1178,17 @@
         video.onseeked = () => {
           ctx.drawImage(video, 0, 0, item.width, item.height);
           sCtx.drawImage(video, 0, 0, item.width, item.height);
-          const position = document.getElementById("watermark-position").value;
           removeWatermark(
             ctx,
             item.width,
             item.height,
-            position,
+            document.getElementById("watermark-position").value,
             cleaningAlgorithm,
             blendRadius,
+            boxScale,
+            detectionSensitivity,
           );
-          setProcessState(false, "Processed video frame ready. Playback processes each frame.", true);
+          setProcessState(false, "Processed frame ready.", true);
         };
 
         if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && video.currentTime === 0) {
@@ -953,14 +1236,15 @@
 
         ctx.drawImage(video, 0, 0, item.width, item.height);
         sCtx.drawImage(video, 0, 0, item.width, item.height);
-        const position = document.getElementById("watermark-position").value;
         removeWatermark(
           ctx,
           item.width,
           item.height,
-          position,
+          document.getElementById("watermark-position").value,
           cleaningAlgorithm,
           blendRadius,
+          boxScale,
+          detectionSensitivity,
         );
 
         const currMinutes = Math.floor(video.currentTime / 60);
@@ -984,74 +1268,73 @@
         position,
         algorithm,
         radius,
+        boxScaleVal = 0.12,
+        sensVal = 0.6,
       ) {
-        const boxes = [];
-        const minSide = Math.min(width, height);
-        const boxSize = Math.max(96, Math.floor(minSide * 0.18));
-        const margin = Math.max(12, Math.floor(minSide * 0.02));
-        const addBox = (x, y) => boxes.push({ x, y, w: boxSize, h: boxSize });
+        // Calculate box in canvas coordinates
+        const sx = Math.max(0, Math.floor(currentBox.x * width));
+        const sy = Math.max(0, Math.floor(currentBox.y * height));
+        const sw = Math.min(width - sx, Math.max(10, Math.floor(currentBox.w * width)));
+        const sh = Math.min(height - sy, Math.max(10, Math.floor(currentBox.h * height)));
+        if (sw <= 0 || sh <= 0) return;
 
-        if (position === "bottom-right" || position === "all-corners") addBox(width - boxSize - margin, height - boxSize - margin);
-        if (position === "bottom-left" || position === "all-corners") addBox(margin, height - boxSize - margin);
-        if (position === "top-right" || position === "all-corners") addBox(width - boxSize - margin, margin);
-        if (position === "top-left" || position === "all-corners") addBox(margin, margin);
+        const imageData = ctx.getImageData(sx, sy, sw, sh);
+        const data = imageData.data;
 
-        boxes.forEach((box) => {
-          const sx = Math.max(0, Math.floor(box.x));
-          const sy = Math.max(0, Math.floor(box.y));
-          const sw = Math.min(width - sx, box.w);
-          const sh = Math.min(height - sy, box.h);
-          if (sw <= 0 || sh <= 0) return;
+        // Compute luminance and chroma distance
+        const lum = new Float32Array(sw * sh);
+        const chroma = new Float32Array(sw * sh);
 
-          const imageData = ctx.getImageData(sx, sy, sw, sh);
-          const data = imageData.data;
-          const threshold = 200;
-          const offset = Math.max(6, Math.min(24, Math.floor(radius)));
+        for (let i = 0; i < sw * sh; i++) {
+          const r = data[i * 4];
+          const g = data[i * 4 + 1];
+          const b = data[i * 4 + 2];
+          lum[i] = 0.299 * r + 0.587 * g + 0.114 * b;
+          chroma[i] = Math.max(r, g, b) - Math.min(r, g, b);
+        }
 
-          if (algorithm === "smart") {
-            // Contextual pixel reconstruction: replace bright, low-saturation
-            // watermark pixels from a diagonal neighborhood instead of blurring
-            // or drawing the destination canvas back onto itself.
-            for (let y = 0; y < sh; y++) {
-              for (let x = 0; x < sw; x++) {
-                const idx = (y * sw + x) * 4;
-                const r = data[idx], g = data[idx + 1], b = data[idx + 2];
-                const lowSaturation = Math.max(r, g, b) - Math.min(r, g, b) < 45;
-                if (r > threshold && g > threshold && b > threshold && lowSaturation) {
-                  const sampleX = Math.max(0, Math.min(sw - 1, x + (x < sw / 2 ? offset : -offset)));
-                  const sampleY = Math.max(0, Math.min(sh - 1, y + (y < sh / 2 ? offset : -offset)));
-                  const sampleIdx = (sampleY * sw + sampleX) * 4;
-                  data[idx] = data[sampleIdx];
-                  data[idx + 1] = data[sampleIdx + 1];
-                  data[idx + 2] = data[sampleIdx + 2];
-                }
+        // Fast background luminance estimation
+        const rad = Math.max(3, Math.min(15, Math.floor(Math.min(sw, sh) * 0.15)));
+        const bgLum = new Float32Array(sw * sh);
+
+        for (let y = 0; y < sh; y++) {
+          for (let x = 0; x < sw; x++) {
+            let sum = 0;
+            let count = 0;
+            for (let dy = -rad; dy <= rad; dy += 2) {
+              const ny = y + dy;
+              if (ny < 0 || ny >= sh) continue;
+              for (let dx = -rad; dx <= rad; dx += 2) {
+                const nx = x + dx;
+                if (nx < 0 || nx >= sw) continue;
+                sum += lum[ny * sw + nx];
+                count++;
               }
             }
-          } else {
-            // Texture clone: replace bright watermark blocks with the closest
-            // diagonal texture patch in the same corner region.
-            const patchSize = Math.max(4, Math.min(12, Math.floor(radius / 2)));
-            for (let y = patchSize; y < sh - patchSize; y += patchSize) {
-              for (let x = patchSize; x < sw - patchSize; x += patchSize) {
-                const idx = (y * sw + x) * 4;
-                if (data[idx] > threshold && data[idx + 1] > threshold && data[idx + 2] > threshold) {
-                  const refX = Math.max(0, x - patchSize * 2);
-                  const refY = Math.max(0, y - patchSize * 2);
-                  for (let py = 0; py < patchSize && y + py < sh; py++) {
-                    for (let px = 0; px < patchSize && x + px < sw; px++) {
-                      const target = ((y + py) * sw + (x + px)) * 4;
-                      const source = ((refY + py) * sw + (refX + px)) * 4;
-                      data[target] = data[source];
-                      data[target + 1] = data[source + 1];
-                      data[target + 2] = data[source + 2];
-                    }
-                  }
-                }
-              }
-            }
+            bgLum[y * sw + x] = count > 0 ? sum / count : lum[y * sw + x];
           }
-          ctx.putImageData(imageData, sx, sy);
-        });
+        }
+
+        const threshGlow = Math.max(5, Math.floor(18 - sensVal * 14));
+        const chromaLimit = 60;
+
+        for (let i = 0; i < sw * sh; i++) {
+          const diff = lum[i] - bgLum[i];
+          if (diff > threshGlow && chroma[i] < chromaLimit) {
+            const alpha = Math.min(1.0, (diff - threshGlow) / 20.0);
+            const r = data[i * 4];
+            const g = data[i * 4 + 1];
+            const b = data[i * 4 + 2];
+            const targetLum = bgLum[i];
+            const ratio = (targetLum + 1) / (lum[i] + 1);
+
+            data[i * 4] = Math.max(0, Math.min(255, Math.round(r * (1 - alpha) + r * ratio * alpha)));
+            data[i * 4 + 1] = Math.max(0, Math.min(255, Math.round(g * (1 - alpha) + g * ratio * alpha)));
+            data[i * 4 + 2] = Math.max(0, Math.min(255, Math.round(b * (1 - alpha) + b * ratio * alpha)));
+          }
+        }
+
+        ctx.putImageData(imageData, sx, sy);
       }
 
       // Interactive Slider Dragging
